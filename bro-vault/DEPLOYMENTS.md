@@ -57,6 +57,50 @@ Next steps once BRO launches:
    `V4_UNI_MIGRATOR`, but not yet independently confirmed for BRO
    specifically since it doesn't exist yet).
 
+### Flap launch failure -- root-caused, no redeploy needed
+
+The first BRO launch attempt on Flap failed client-side ("Token creation
+failed for an unrecognized contract reason. Error code: 0x1b0062e0") with no
+on-chain transaction ever broadcast (confirmed by checking the full real tx
+history of the deployer wallet). `0x1b0062e0` does not match any error
+selector in our contracts, in Flap's real verified `VaultPortal`/
+`VaultPortalBase`/interfaces, in `VAULT_PORTAL_LAUNCH`'s own deployed
+bytecode, in OpenZeppelin, in Solidity builtins, or in any public signature
+database -- it is almost certainly a client-side/frontend code, not a raw
+on-chain revert selector.
+
+`newTokenV6WithVault` on the real `VaultPortal` proxy
+(`0xe9F7AB7DE8FB8756acbB6a1cd13316a43308197B`) delegatecalls straight into
+`VAULT_PORTAL_LAUNCH` (`0x8B4329947e34B6d56D71A3385caC122BaDe7d78D`), which is
+**not publicly verified** -- all real launch validation logic lives there.
+`test/BROMSTRVault.launchSim.fork.t.sol` black-box tests it directly on a
+live mainnet fork (no broadcast) with our real deployed factory
+(`0x963311e32cd50BCBF99990467B8C5354Ba05017d`) as `vaultFactory`, and found
+the actual root cause empirically:
+
+- `mktBps == 0` -- i.e. Flap's "Marketing" tax-allocation slider left at
+  0% -- reverts `InvalidMktBps()` (`0x2b1599db`, confirmed present in
+  `VAULT_PORTAL_LAUNCH`'s own bytecode and resolved via openchain.xyz)
+  **before our factory or vault code ever runs.**
+- A nonzero-but-partial `mktBps` (e.g. 500 = 5%) passes that check and
+  reaches *our* factory's `onBeforeLaunch`, which correctly rejects it with
+  our own exact string ("BRO MSTR Vault requires 100% of tax revenue to be
+  allocated to the vault."). This proves Flap's real `LaunchValidationDataV1
+  .vaultBps` equals `mktBps` **verbatim** -- Flap redirects the "Marketing"
+  bps recipient to the custom vault, it does not compute `10_000 - mktBps`.
+- `mktBps == 10_000` (deflation/dividend/lp bps all 0) passes `InvalidMktBps()`
+  **and** passes our factory's `vaultBps == 10_000` check silently. The next
+  revert is `InvalidVanity(address)` (`0x7576ca0a`) -- Flap's ordinary
+  vanity-suffix salt-mining requirement that applies to every token launch on
+  Flap and is already handled automatically by Flap's own frontend. It is
+  unrelated to our custom vault factory and needs no fix here.
+
+**Conclusion: our factory is correct and does not need to be changed or
+redeployed.** To launch BRO, set Flap's **Marketing allocation slider to
+100%** (not 0%) -- it is the field that gets redirected to the custom vault
+for a custom-vault launch, not a separate "Vault %" control -- while the
+native Dividend/Burn/Liquidity sliders stay at 0%, exactly as before.
+
 ### Keeper bot
 
 `bro-vault/keeper/` is ready to run once the vault exists (see its own
