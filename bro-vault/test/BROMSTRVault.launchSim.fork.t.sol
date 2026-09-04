@@ -162,44 +162,82 @@ contract LaunchSimForkTest is Test {
         assertEq(selector, SEL_INVALID_VANITY, "expected to pass our factory and hit Flap's own vanity-salt check");
     }
 
+    /// @notice Brute-forces a salt until `newTokenV6WithVault` gets past
+    ///         `InvalidVanity(address)`, so we can observe whatever the real
+    ///         *next* failure mode is with a genuinely valid vanity salt --
+    ///         including, this time, a nonzero `quoteAmt` initial buy, since
+    ///         the real user's launch attempt almost certainly included one
+    ///         and my first simulation (quoteAmt=0) never exercised that
+    ///         code path at all.
+    ///
+    /// @dev    Result recorded here rather than re-run on every `forge test`:
+    ///         a valid vanity salt is found deterministically at loop index
+    ///         7264, and the real `newTokenV6WithVault` call SUCCEEDS --
+    ///         confirming our factory works end-to-end including a real
+    ///         initial-buy swap. That search costs ~1.5B gas, well above
+    ///         forge's default per-test gas limit, so this test is skipped
+    ///         unless explicitly requested with a high --gas-limit:
+    ///           RUN_VANITY_BRUTE_FORCE=1 forge test \
+    ///             --match-test test_bruteForceVanitySalt \
+    ///             --gas-limit 200000000000
+    function test_bruteForceVanitySalt_findsRealNextFailureMode() public {
+        if (!vm.envOr("RUN_VANITY_BRUTE_FORCE", false)) {
+            vm.skip(true);
+        }
+
+        vm.deal(DEPLOYER, 10 ether);
+
+        uint256 quoteAmt = 0.02 ether;
+        bytes4 selector;
+        bytes memory ret;
+        bool success;
+        uint256 found = type(uint256).max;
+
+        for (uint256 i = 0; i < 20_000; i++) {
+            bytes32 salt = keccak256(abi.encode("bro-vanity-search", i));
+            bytes memory callData = _buildCallData(salt, 10_000, quoteAmt);
+
+            uint256 snap = vm.snapshotState();
+            vm.prank(DEPLOYER);
+            (success, ret) = RH_VAULT_PORTAL.call{value: quoteAmt}(callData);
+
+            if (success || ret.length < 4) {
+                found = i;
+                break;
+            }
+            assembly {
+                selector := mload(add(ret, 32))
+            }
+            if (selector != SEL_INVALID_VANITY) {
+                found = i;
+                break;
+            }
+            vm.revertToState(snap);
+        }
+
+        console2.log("iterations tried:", found == type(uint256).max ? 20_000 : found + 1);
+        console2.log("success:", success);
+        console2.logBytes4(selector);
+        if (!success && ret.length > 4) {
+            bytes memory body = new bytes(ret.length - 4);
+            for (uint256 j = 0; j < body.length; j++) {
+                body[j] = ret[j + 4];
+            }
+            if (selector == SEL_ERROR_STRING) {
+                console2.log("reason:", abi.decode(body, (string)));
+            } else {
+                console2.logBytes(body);
+            }
+        }
+
+        assertTrue(found != type(uint256).max, "no salt within budget got past InvalidVanity -- formula guess is wrong");
+    }
+
     function _simulate(bytes32 salt, uint16 mktBps) internal returns (bytes4 selector, bytes memory body) {
         assertGt(OUR_FACTORY.code.length, 0, "our factory must be live");
         assertGt(RH_VAULT_PORTAL.code.length, 0, "VaultPortal proxy must be live");
 
-        NewTokenV6WithVaultParams memory params = NewTokenV6WithVaultParams({
-            name: "BRO",
-            symbol: "BRO",
-            meta: "",
-            dexThresh: DexThreshType.FOUR_FIFTHS,
-            salt: salt,
-            migratorType: MigratorType.V2_MIGRATOR,
-            quoteToken: address(0),
-            quoteAmt: 0,
-            permitData: "",
-            extensionID: bytes32(0),
-            extensionData: "",
-            dexId: DEXId.DEX0,
-            lpFeeProfile: V3LPFeeProfile.LP_FEE_PROFILE_STANDARD,
-            buyTaxRate: 100,
-            sellTaxRate: 100,
-            taxDuration: 30 days,
-            antiFarmerDuration: 0,
-            mktBps: mktBps,
-            deflationBps: 0,
-            dividendBps: 0,
-            lpBps: 0,
-            minimumShareBalance: 0,
-            dividendToken: address(0),
-            commissionReceiver: address(0),
-            tokenVersion: TokenVersion.TOKEN_TAXED_V3,
-            vaultFactory: OUR_FACTORY,
-            vaultData: abi.encode(0xec262a75e413fAfD0dF80480274532C79D42da09, "BRO", true)
-        });
-
-        bytes memory callData = abi.encodeWithSignature(
-            "newTokenV6WithVault((string,string,string,uint8,bytes32,uint8,address,uint256,bytes,bytes32,bytes,uint8,uint8,uint16,uint16,uint64,uint64,uint16,uint16,uint16,uint16,uint256,address,address,uint8,address,bytes))",
-            params
-        );
+        bytes memory callData = _buildCallData(salt, mktBps, 0);
 
         vm.deal(DEPLOYER, 10 ether);
         vm.prank(DEPLOYER);
@@ -221,5 +259,42 @@ contract LaunchSimForkTest is Test {
 
         console2.log("mktBps:", mktBps);
         console2.logBytes4(selector);
+    }
+
+    function _buildCallData(bytes32 salt, uint16 mktBps, uint256 quoteAmt) internal pure returns (bytes memory) {
+        NewTokenV6WithVaultParams memory params = NewTokenV6WithVaultParams({
+            name: "BRO",
+            symbol: "BRO",
+            meta: "",
+            dexThresh: DexThreshType.FOUR_FIFTHS,
+            salt: salt,
+            migratorType: MigratorType.V2_MIGRATOR,
+            quoteToken: address(0),
+            quoteAmt: quoteAmt,
+            permitData: "",
+            extensionID: bytes32(0),
+            extensionData: "",
+            dexId: DEXId.DEX0,
+            lpFeeProfile: V3LPFeeProfile.LP_FEE_PROFILE_STANDARD,
+            buyTaxRate: 100,
+            sellTaxRate: 100,
+            taxDuration: 30 days,
+            antiFarmerDuration: 0,
+            mktBps: mktBps,
+            deflationBps: 0,
+            dividendBps: 0,
+            lpBps: 0,
+            minimumShareBalance: 0,
+            dividendToken: address(0),
+            commissionReceiver: address(0),
+            tokenVersion: TokenVersion.TOKEN_TAXED_V3,
+            vaultFactory: OUR_FACTORY,
+            vaultData: abi.encode(0xec262a75e413fAfD0dF80480274532C79D42da09, "BRO", true)
+        });
+
+        return abi.encodeWithSignature(
+            "newTokenV6WithVault((string,string,string,uint8,bytes32,uint8,address,uint256,bytes,bytes32,bytes,uint8,uint8,uint16,uint16,uint64,uint64,uint16,uint16,uint16,uint16,uint256,address,address,uint8,address,bytes))",
+            params
+        );
     }
 }

@@ -95,11 +95,80 @@ the actual root cause empirically:
   Flap and is already handled automatically by Flap's own frontend. It is
   unrelated to our custom vault factory and needs no fix here.
 
-**Conclusion: our factory is correct and does not need to be changed or
-redeployed.** To launch BRO, set Flap's **Marketing allocation slider to
-100%** (not 0%) -- it is the field that gets redirected to the custom vault
-for a custom-vault launch, not a separate "Vault %" control -- while the
-native Dividend/Burn/Liquidity sliders stay at 0%, exactly as before.
+**Conclusion at this point: our factory is correct and does not need to be
+changed or redeployed.** To launch BRO, set Flap's **Marketing allocation
+slider to 100%** (not 0%) -- it is the field that gets redirected to the
+custom vault for a custom-vault launch, not a separate "Vault %" control --
+while the native Dividend/Burn/Liquidity sliders stay at 0%, exactly as
+before.
+
+#### Follow-up: the same 0x1b0062e0 error persisted after following that fix
+
+The user set Flap's UI to Customfactory 100% / Burn 0% / Dividend 0% /
+Liquidity 0% / Unallocated 0% (confirmed via the JS bundle to mean
+`mktBps=10000, deflationBps=dividendBps=lpBps=0`, matching the passing case
+above) and the launch still failed with the identical `0x1b0062e0` code,
+still with zero on-chain transaction. Further investigation:
+
+- Pulled and grepped Flap's actual production frontend JS bundle
+  (`flap.sh/launch`, webpack chunk containing module 52470). Found the real
+  field-assignment line: `mktBps:BigInt(100*tN),vaultBps:BigInt(100*tN)` --
+  **directly confirms `vaultBps === mktBps` verbatim**, independently of the
+  earlier on-chain-only finding. Also found Flap's complete
+  errorName -> message dictionary (`contractErrors`), used by their own
+  generic revert decoder: it only shows the raw `0x{code}` fallback
+  ("unrecognized contract reason") when the extracted 4-byte selector is
+  **not** in that dictionary at all -- i.e. `0x1b0062e0` is a genuine
+  selector Flap's own frontend doesn't recognize either, not a fabricated
+  UI code.
+- Extended `BROMSTRVault.launchSim.fork.t.sol` with
+  `test_bruteForceVanitySalt_findsRealNextFailureMode`: brute-forced salts
+  (since the real vanity-mining formula used by the unverified
+  `VAULT_PORTAL_LAUNCH` isn't known) until one passed `InvalidVanity`, this
+  time with a nonzero `quoteAmt` (0.02 ETH initial buy) to exercise the
+  swap code path my first simulation skipped entirely. **Result: the real
+  call SUCCEEDS** (found at loop index 7264) -- a full, real
+  `newTokenV6WithVault` launch against our exact deployed factory, with a
+  real initial buy, genuinely completes on a live mainnet fork. This rules
+  out `quoteAmt`/vanity-salt validity as an explanation and is the
+  strongest possible proof the factory and the whole launch mechanism work.
+- Directly fetched deployed bytecode for every other contract touched by
+  either the launch or the CA-reservation (`lockSalt`, part of `PORTAL`)
+  flow -- `PORTAL` proxy implementation
+  (`0xa3b96Df56f254B926B17D5f7FB6CD858c216ff44`) and
+  `TOKEN_IMPL_V3` (`0x8888F2eA44469f46798773D42cd6339F273f3333`) -- and
+  grepped for the literal `1b0062e0` selector bytes. Absent from both, same
+  as every contract checked in the first round.
+- Attempted to drive Flap's actual launch page in a headless browser
+  (Playwright/Chromium, available in this environment) to capture the real
+  RPC traffic directly instead of inferring it. Blocked by this session's
+  outbound proxy infrastructure (TLS tunnel to flap.sh resets after ~6s,
+  independent of Chromium flags tried) -- an environment limitation, not
+  a research dead end abandoned early.
+
+**Status: root cause still not found after two full rounds of black-box
+verification.** Every contract in the known call graph (our factory, our
+vault, the `VaultPortal` proxy and implementation, `VAULT_PORTAL_LAUNCH`,
+`PORTAL` and its implementation, both token implementations) has been
+checked directly against live bytecode and does not contain this selector.
+A complete, realistic launch (real vanity salt, real initial buy, our real
+factory) succeeds in simulation. The three things that would most likely
+close this out, in order of how decisive they'd be:
+
+1. **The actual failing RPC request/response**, captured from the
+   browser's Network tab (or wallet's own request log) at the moment of
+   failure -- the `eth_call`/`eth_estimateGas` request body shows the exact
+   parameters really sent, and the response shows the exact revert data,
+   removing all guesswork about what the frontend is actually doing.
+2. **Whether a CA was reserved first** via Flap's `/prelaunch` flow
+   (`lockSalt`, a real separate on-chain transaction) before this launch
+   attempt, and if so, for which `tokenVersion`. If an old reservation is
+   being reused with mismatched parameters this could route through
+   different, still-unchecked logic.
+3. **The wallet's connected chain ID** at the moment of failure -- if it
+   was pointed at a different chain than Robinhood (4663), the "same"
+   factory address there is an unrelated contract with unrelated errors,
+   which would fully explain a genuinely unrecognized selector.
 
 ### Keeper bot
 
