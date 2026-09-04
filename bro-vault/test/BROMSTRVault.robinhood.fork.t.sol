@@ -20,7 +20,7 @@ contract BROMSTRVaultRobinhoodForkTest is Test {
     function setUp() public {
         string memory rpcUrl = vm.envOr("ROBINHOOD_RPC_URL", string("https://rpc.mainnet.chain.robinhood.com"));
         vm.createSelectFork(rpcUrl);
-        factory = new BROMSTRVaultBeaconFactory(MSTR, address(0), address(0));
+        factory = new BROMSTRVaultBeaconFactory(MSTR, address(0), address(0), address(0), address(0));
     }
 
     function test_liveDeploymentsAndVaultPortalFactoryFlow() public {

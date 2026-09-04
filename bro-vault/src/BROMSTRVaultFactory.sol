@@ -31,15 +31,6 @@ import {BROMSTRVaultUpgradeable} from "./BROMSTRVault.sol";
 ///      production configuration, MSTR must be the only selected asset and
 ///      receive 100% allocation" as a hard constraint, not just a default.
 contract BROMSTRVaultBeaconFactory is VaultFactoryBaseV2 {
-    // ========== ERRORS ==========
-    // Note: ZeroAddress is already declared in IVaultFactory (inherited via
-    // VaultFactoryBaseV2) -- reused here rather than redeclared.
-    error UnsupportedAsset(address asset);
-    error OnlyMSTRSupportedForBRO();
-    error AlreadyRegistered();
-    error NotRegistered();
-    error CannotDeregisterMSTR();
-
     // ========== IMMUTABLE ==========
     address public immutable beacon;
     /// @notice The only reward asset a BRO vault may ever select.
@@ -50,32 +41,49 @@ contract BROMSTRVaultBeaconFactory is VaultFactoryBaseV2 {
     address[] private _supportedAssetList;
 
     // ========== OPERATIONAL CONFIG (applied to vaults this factory creates) ==========
-    address public defaultSwapAdapter;
+    address public defaultMstrSwapAdapter;
+    address public defaultLiquidityAdapter;
+    address public defaultBurnSwapAdapter;
     address public defaultKeeper;
-    uint256 public defaultMinSwapThresholdWei;
 
     // ========== EVENTS ==========
     event AssetRegistered(address indexed asset);
     event AssetDeregistered(address indexed asset);
-    event DefaultSwapAdapterUpdated(address indexed adapter);
+    event DefaultMstrSwapAdapterUpdated(address indexed adapter);
+    event DefaultLiquidityAdapterUpdated(address indexed adapter);
+    event DefaultBurnSwapAdapterUpdated(address indexed adapter);
     event DefaultKeeperUpdated(address indexed keeper);
     event VaultCreated(address indexed taxToken, address indexed vault, address mstrAsset);
 
-    /// @param _mstr             MSTR Stock Token address. VERIFY INDEPENDENTLY before
-    ///                          deployment -- see README.
-    /// @param _defaultSwapAdapter Initial IMSTRSwapAdapter address (can be address(0)
-    ///                          and set later by Guardian; vaults will simply be
-    ///                          unable to dispatch() until one is configured).
-    /// @param _defaultKeeper    Initial keeper address for vaults this factory creates.
-    constructor(address _mstr, address _defaultSwapAdapter, address _defaultKeeper) {
-        if (_mstr == address(0)) revert ZeroAddress();
+    /// @param _mstr                  MSTR Stock Token address. VERIFY INDEPENDENTLY before
+    ///                               deployment -- see README.
+    /// @param _defaultMstrSwapAdapter Initial IMSTRSwapAdapter address for the ETH->MSTR
+    ///                               dividend leg (can be address(0) and set later by
+    ///                               Guardian; vaults will simply be unable to
+    ///                               dispatchDividend() until one is configured).
+    /// @param _defaultLiquidityAdapter Initial ILiquidityAdapter address for the
+    ///                               auto-liquidity leg (can be address(0), same caveat).
+    /// @param _defaultBurnSwapAdapter Initial IMSTRSwapAdapter address (reused generically)
+    ///                               for the ETH->BRO buy-and-burn leg (can be address(0),
+    ///                               same caveat).
+    /// @param _defaultKeeper         Initial keeper address for vaults this factory creates.
+    constructor(
+        address _mstr,
+        address _defaultMstrSwapAdapter,
+        address _defaultLiquidityAdapter,
+        address _defaultBurnSwapAdapter,
+        address _defaultKeeper
+    ) {
+        require(_mstr != address(0), "Zero address");
 
         MSTR = _mstr;
         isSupportedAsset[_mstr] = true;
         _supportedAssetList.push(_mstr);
         emit AssetRegistered(_mstr);
 
-        defaultSwapAdapter = _defaultSwapAdapter;
+        defaultMstrSwapAdapter = _defaultMstrSwapAdapter;
+        defaultLiquidityAdapter = _defaultLiquidityAdapter;
+        defaultBurnSwapAdapter = _defaultBurnSwapAdapter;
         defaultKeeper = _defaultKeeper;
 
         BROMSTRVaultUpgradeable impl = new BROMSTRVaultUpgradeable();
@@ -90,9 +98,9 @@ contract BROMSTRVaultBeaconFactory is VaultFactoryBaseV2 {
     ///         NatSpec. This exists for forward compatibility if this factory
     ///         is ever reused as a template for a non-BRO-specific deployment.
     function registerAsset(address asset) external {
-        if (msg.sender != _getGuardian()) revert NotRegistered();
-        if (asset == address(0)) revert ZeroAddress();
-        if (isSupportedAsset[asset]) revert AlreadyRegistered();
+        require(msg.sender == _getGuardian(), "Not guardian");
+        require(asset != address(0), "Zero address");
+        require(!isSupportedAsset[asset], "Already registered");
 
         isSupportedAsset[asset] = true;
         _supportedAssetList.push(asset);
@@ -100,9 +108,9 @@ contract BROMSTRVaultBeaconFactory is VaultFactoryBaseV2 {
     }
 
     function deregisterAsset(address asset) external {
-        if (msg.sender != _getGuardian()) revert NotRegistered();
-        if (asset == MSTR) revert CannotDeregisterMSTR();
-        if (!isSupportedAsset[asset]) revert NotRegistered();
+        require(msg.sender == _getGuardian(), "Not guardian");
+        require(asset != MSTR, "Cannot deregister MSTR");
+        require(isSupportedAsset[asset], "Not registered");
 
         isSupportedAsset[asset] = false;
         emit AssetDeregistered(asset);
@@ -129,14 +137,26 @@ contract BROMSTRVaultBeaconFactory is VaultFactoryBaseV2 {
 
     // ========== GUARDIAN: OPERATIONAL DEFAULTS ==========
 
-    function setDefaultSwapAdapter(address adapter) external {
-        if (msg.sender != _getGuardian()) revert NotRegistered();
-        defaultSwapAdapter = adapter;
-        emit DefaultSwapAdapterUpdated(adapter);
+    function setDefaultMstrSwapAdapter(address adapter) external {
+        require(msg.sender == _getGuardian(), "Not guardian");
+        defaultMstrSwapAdapter = adapter;
+        emit DefaultMstrSwapAdapterUpdated(adapter);
+    }
+
+    function setDefaultLiquidityAdapter(address adapter) external {
+        require(msg.sender == _getGuardian(), "Not guardian");
+        defaultLiquidityAdapter = adapter;
+        emit DefaultLiquidityAdapterUpdated(adapter);
+    }
+
+    function setDefaultBurnSwapAdapter(address adapter) external {
+        require(msg.sender == _getGuardian(), "Not guardian");
+        defaultBurnSwapAdapter = adapter;
+        emit DefaultBurnSwapAdapterUpdated(adapter);
     }
 
     function setDefaultKeeper(address keeper_) external {
-        if (msg.sender != _getGuardian()) revert NotRegistered();
+        require(msg.sender == _getGuardian(), "Not guardian");
         defaultKeeper = keeper_;
         emit DefaultKeeperUpdated(keeper_);
     }
@@ -178,9 +198,9 @@ contract BROMSTRVaultBeaconFactory is VaultFactoryBaseV2 {
         override
         returns (address vault)
     {
-        if (msg.sender != _getVaultPortal()) revert OnlyVaultPortal();
-        if (taxToken == address(0)) revert ZeroAddress();
-        if (!isQuoteTokenSupported(quoteToken)) revert UnsupportedAsset(quoteToken);
+        require(msg.sender == _getVaultPortal(), "Only vault portal");
+        require(taxToken != address(0), "Zero address");
+        require(isQuoteTokenSupported(quoteToken), "Unsupported quote token");
 
         (address selectedAsset,, bool instantDividend) = abi.decode(vaultData, (address, string, bool));
 
@@ -194,7 +214,9 @@ contract BROMSTRVaultBeaconFactory is VaultFactoryBaseV2 {
                     (
                         taxToken,
                         selectedAsset,
-                        defaultSwapAdapter,
+                        defaultMstrSwapAdapter,
+                        defaultLiquidityAdapter,
+                        defaultBurnSwapAdapter,
                         defaultKeeper,
                         instantDividend,
                         0 // minSwapThresholdWei -- Guardian can raise this post-deploy via setMinSwapThreshold
@@ -207,13 +229,13 @@ contract BROMSTRVaultBeaconFactory is VaultFactoryBaseV2 {
     }
 
     function _validateSelectedAsset(address selectedAsset) internal view {
-        if (selectedAsset == address(0)) revert ZeroAddress();
-        if (!isSupportedAsset[selectedAsset]) revert UnsupportedAsset(selectedAsset);
+        require(selectedAsset != address(0), "Zero address");
+        require(isSupportedAsset[selectedAsset], "Unsupported asset");
 
         // BRO-specific hard constraint: exactly the constructor-verified MSTR
         // asset. Do not infer this from registry ordering: the registry is an
         // administrative convenience, whereas the BRO asset is immutable.
-        if (selectedAsset != MSTR) revert OnlyMSTRSupportedForBRO();
+        require(selectedAsset == MSTR, "Only MSTR supported for BRO");
     }
 
     function isQuoteTokenSupported(address quoteToken) public pure override returns (bool supported) {
@@ -233,6 +255,9 @@ contract BROMSTRVaultBeaconFactory is VaultFactoryBaseV2 {
         // Flap's vault/market allocation is the ETH stream received by this
         // vault. `dividendBps` instead routes native dividends through Flap's
         // separate dividend processor, which is not this vault's MSTR flow.
+        // `deflationBps`/`lpBps` are Flap's OWN native burn/auto-liquidity
+        // mechanisms; they must stay at zero because this vault implements
+        // its own 80/15/5 dividend/liquidity/burn split internally instead.
         if (data.vaultBps != 10_000) {
             return (false, "BRO MSTR Vault requires 100% of tax revenue to be allocated to the vault.");
         }
