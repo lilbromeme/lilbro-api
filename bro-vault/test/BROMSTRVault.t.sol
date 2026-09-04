@@ -125,34 +125,25 @@ contract BROMSTRVaultFactoryTest is Test {
         vm.prank(RH_GUARDIAN);
         factory.registerAsset(otherAsset);
 
-        address[] memory assets = new address[](1);
-        assets[0] = otherAsset;
-
         vm.prank(RH_VAULT_PORTAL);
         vm.expectRevert(BROMSTRVaultBeaconFactory.OnlyMSTRSupportedForBRO.selector);
-        factory.newVault(predictedTaxToken, address(0), address(this), _vaultData(assets, true));
+        factory.newVault(predictedTaxToken, address(0), address(this), _vaultData(otherAsset, true));
     }
 
     // ---------- newVault / asset validation ----------
 
-    function _vaultData(address[] memory assets, bool instant) internal pure returns (bytes memory) {
-        return abi.encode(assets, "BRO", instant);
+    function _vaultData(address asset, bool instant) internal pure returns (bytes memory) {
+        return abi.encode(asset, "BRO", instant);
     }
 
     function test_newVault_onlyCallableByVaultPortal() public {
-        address[] memory assets = new address[](1);
-        assets[0] = address(mstr);
-
         vm.expectRevert();
-        factory.newVault(predictedTaxToken, address(0), address(this), _vaultData(assets, true));
+        factory.newVault(predictedTaxToken, address(0), address(this), _vaultData(address(mstr), true));
     }
 
     function test_newVault_succeedsWithMSTR() public {
-        address[] memory assets = new address[](1);
-        assets[0] = address(mstr);
-
         vm.prank(RH_VAULT_PORTAL);
-        address vault = factory.newVault(predictedTaxToken, address(0), address(this), _vaultData(assets, true));
+        address vault = factory.newVault(predictedTaxToken, address(0), address(this), _vaultData(address(mstr), true));
 
         assertTrue(vault != address(0));
         assertEq(BROMSTRVaultUpgradeable(payable(vault)).taxToken(), predictedTaxToken);
@@ -162,43 +153,15 @@ contract BROMSTRVaultFactoryTest is Test {
     }
 
     function test_newVault_rejectsUnsupportedAsset() public {
-        address[] memory assets = new address[](1);
-        assets[0] = address(0xDEAD); // never registered
-
         vm.prank(RH_VAULT_PORTAL);
         vm.expectRevert(abi.encodeWithSelector(BROMSTRVaultBeaconFactory.UnsupportedAsset.selector, address(0xDEAD)));
-        factory.newVault(predictedTaxToken, address(0), address(this), _vaultData(assets, true));
+        factory.newVault(predictedTaxToken, address(0), address(this), _vaultData(address(0xDEAD), true)); // never registered
     }
 
     function test_newVault_rejectsZeroAddressAsset() public {
-        address[] memory assets = new address[](1);
-        assets[0] = address(0);
-
         vm.prank(RH_VAULT_PORTAL);
         vm.expectRevert(IVaultFactory.ZeroAddress.selector);
-        factory.newVault(predictedTaxToken, address(0), address(this), _vaultData(assets, true));
-    }
-
-    function test_newVault_rejectsEmptyAssetArray() public {
-        address[] memory assets = new address[](0);
-
-        vm.prank(RH_VAULT_PORTAL);
-        vm.expectRevert(BROMSTRVaultBeaconFactory.NoAssetsSelected.selector);
-        factory.newVault(predictedTaxToken, address(0), address(this), _vaultData(assets, true));
-    }
-
-    function test_newVault_rejectsTooManyAssets() public {
-        vm.prank(RH_GUARDIAN);
-        address second = address(0x9999);
-        factory.registerAsset(second);
-
-        address[] memory assets = new address[](2);
-        assets[0] = address(mstr);
-        assets[1] = second;
-
-        vm.prank(RH_VAULT_PORTAL);
-        vm.expectRevert(BROMSTRVaultBeaconFactory.TooManyAssets.selector);
-        factory.newVault(predictedTaxToken, address(0), address(this), _vaultData(assets, true));
+        factory.newVault(predictedTaxToken, address(0), address(this), _vaultData(address(0), true));
     }
 
     function test_isQuoteTokenSupported_onlyNativeETH() public view {
@@ -274,12 +237,9 @@ contract BROMSTRVaultTest is Test {
 
         factory = new BROMSTRVaultBeaconFactory(address(mstr), address(adapter), keeper);
 
-        address[] memory assets = new address[](1);
-        assets[0] = address(mstr);
-
         vm.prank(RH_VAULT_PORTAL);
         address vaultAddr =
-            factory.newVault(predictedTaxToken, address(0), address(this), abi.encode(assets, "BRO", true));
+            factory.newVault(predictedTaxToken, address(0), address(this), abi.encode(address(mstr), "BRO", true));
         vault = BROMSTRVaultUpgradeable(payable(vaultAddr));
 
         // Guardian raises the swap threshold to something realistic for these tests.
@@ -326,11 +286,10 @@ contract BROMSTRVaultTest is Test {
         BROMSTRVaultBeaconFactory reentrantFactory =
             new BROMSTRVaultBeaconFactory(address(reentrantMstr), address(reentrantAdapter), keeper);
 
-        address[] memory assets = new address[](1);
-        assets[0] = address(reentrantMstr);
         vm.prank(RH_VAULT_PORTAL);
-        address reentrantVaultAddress =
-            reentrantFactory.newVault(predictedTaxToken, address(0), address(this), abi.encode(assets, "BRO", true));
+        address reentrantVaultAddress = reentrantFactory.newVault(
+            predictedTaxToken, address(0), address(this), abi.encode(address(reentrantMstr), "BRO", true)
+        );
         BROMSTRVaultUpgradeable reentrantVault = BROMSTRVaultUpgradeable(payable(reentrantVaultAddress));
 
         vm.deal(reentrantVaultAddress, 1 ether);

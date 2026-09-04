@@ -30,11 +30,8 @@ contract BROMSTRVaultRobinhoodForkTest is Test {
         assertGt(UNISWAP_V4_POOL_MANAGER.code.length, 0, "Uniswap V4 PoolManager must be deployed");
         assertGt(UNISWAP_UNIVERSAL_ROUTER.code.length, 0, "Uniswap Universal Router must be deployed");
 
-        address[] memory assets = new address[](1);
-        assets[0] = MSTR;
-
         vm.prank(VAULT_PORTAL);
-        address vault = factory.newVault(address(0xB0), address(0), address(this), abi.encode(assets, "BRO", true));
+        address vault = factory.newVault(address(0xB0), address(0), address(this), abi.encode(MSTR, "BRO", true));
 
         assertEq(BROMSTRVaultUpgradeable(payable(vault)).taxToken(), address(0xB0));
         assertEq(BROMSTRVaultUpgradeable(payable(vault)).mstrToken(), MSTR);

@@ -57,6 +57,6 @@ contract DeployBROMSTRFactory is Script {
         console.log("   factory.setDefaultSwapAdapter(...) as Guardian.");
         console.log("3. Go to Flap -> Launch Token -> Custom Vault, paste this factory");
         console.log("   address, and confirm the auto-generated form shows");
-        console.log("   selectedAssets / symbol / instantDividend as expected.");
+        console.log("   selectedAsset / symbol / instantDividend as expected.");
     }
 }

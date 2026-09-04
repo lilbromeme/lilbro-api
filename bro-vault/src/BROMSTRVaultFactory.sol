@@ -34,17 +34,11 @@ contract BROMSTRVaultBeaconFactory is VaultFactoryBaseV2 {
     // ========== ERRORS ==========
     // Note: ZeroAddress is already declared in IVaultFactory (inherited via
     // VaultFactoryBaseV2) -- reused here rather than redeclared.
-    error DuplicateAsset();
     error UnsupportedAsset(address asset);
-    error TooManyAssets();
-    error NoAssetsSelected();
     error OnlyMSTRSupportedForBRO();
     error AlreadyRegistered();
     error NotRegistered();
     error CannotDeregisterMSTR();
-
-    // ========== CONSTANTS ==========
-    uint256 public constant MAX_SELECTED_ASSETS = 1; // BRO vaults are single-asset (MSTR) by design
 
     // ========== IMMUTABLE ==========
     address public immutable beacon;
@@ -172,9 +166,13 @@ contract BROMSTRVaultBeaconFactory is VaultFactoryBaseV2 {
     // ========== IVaultFactory ==========
 
     /// @notice Deploy and initialize a new BRO MSTR vault.
-    /// @dev    vaultData = abi.encode(address[] selectedAssets, string symbol, bool instantDividend)
+    /// @dev    vaultData = abi.encode(address selectedAsset, string symbol, bool instantDividend)
     ///         per the schema in `vaultDataSchema()`. For BRO's production
-    ///         configuration, `selectedAssets` MUST be exactly `[MSTR]`.
+    ///         configuration, `selectedAsset` MUST be exactly `MSTR`.
+    ///
+    ///         `selectedAsset` is a single `address`, not an `address[]`: Flap's
+    ///         schema spec (see IVaultSchemasV1.sol) only supports scalar field
+    ///         types for UI-driven form encoding, not array-typed leaf fields.
     function newVault(address taxToken, address quoteToken, address, /* creator */ bytes calldata vaultData)
         external
         override
@@ -184,9 +182,9 @@ contract BROMSTRVaultBeaconFactory is VaultFactoryBaseV2 {
         if (taxToken == address(0)) revert ZeroAddress();
         if (!isQuoteTokenSupported(quoteToken)) revert UnsupportedAsset(quoteToken);
 
-        (address[] memory selectedAssets,, bool instantDividend) = abi.decode(vaultData, (address[], string, bool));
+        (address selectedAsset,, bool instantDividend) = abi.decode(vaultData, (address, string, bool));
 
-        _validateSelectedAssets(selectedAssets);
+        _validateSelectedAsset(selectedAsset);
 
         vault = address(
             new BeaconProxy(
@@ -195,7 +193,7 @@ contract BROMSTRVaultBeaconFactory is VaultFactoryBaseV2 {
                     BROMSTRVaultUpgradeable.initialize,
                     (
                         taxToken,
-                        selectedAssets[0],
+                        selectedAsset,
                         defaultSwapAdapter,
                         defaultKeeper,
                         instantDividend,
@@ -205,27 +203,17 @@ contract BROMSTRVaultBeaconFactory is VaultFactoryBaseV2 {
             )
         );
 
-        emit VaultCreated(taxToken, vault, selectedAssets[0]);
+        emit VaultCreated(taxToken, vault, selectedAsset);
     }
 
-    function _validateSelectedAssets(address[] memory selectedAssets) internal view {
-        if (selectedAssets.length == 0) revert NoAssetsSelected();
-        if (selectedAssets.length > MAX_SELECTED_ASSETS) revert TooManyAssets();
-
-        // Duplicate check (relevant if MAX_SELECTED_ASSETS is ever raised for
-        // a non-BRO deployment reusing this factory as a template).
-        for (uint256 i = 0; i < selectedAssets.length; i++) {
-            if (selectedAssets[i] == address(0)) revert ZeroAddress();
-            if (!isSupportedAsset[selectedAssets[i]]) revert UnsupportedAsset(selectedAssets[i]);
-            for (uint256 j = i + 1; j < selectedAssets.length; j++) {
-                if (selectedAssets[i] == selectedAssets[j]) revert DuplicateAsset();
-            }
-        }
+    function _validateSelectedAsset(address selectedAsset) internal view {
+        if (selectedAsset == address(0)) revert ZeroAddress();
+        if (!isSupportedAsset[selectedAsset]) revert UnsupportedAsset(selectedAsset);
 
         // BRO-specific hard constraint: exactly the constructor-verified MSTR
         // asset. Do not infer this from registry ordering: the registry is an
         // administrative convenience, whereas the BRO asset is immutable.
-        if (selectedAssets[0] != MSTR) revert OnlyMSTRSupportedForBRO();
+        if (selectedAsset != MSTR) revert OnlyMSTRSupportedForBRO();
     }
 
     function isQuoteTokenSupported(address quoteToken) public pure override returns (bool supported) {
@@ -256,9 +244,9 @@ contract BROMSTRVaultBeaconFactory is VaultFactoryBaseV2 {
 
     function vaultDataSchema() public pure override returns (VaultDataSchema memory schema) {
         schema.description =
-            "Creates a BRO MSTR Vault. selectedAssets must be exactly [MSTR] -- this factory rejects any other configuration. symbol is informational. instantDividend selects push-to-holder (true) vs. claim-based (false) distribution UX.";
+            "Creates a BRO MSTR Vault. selectedAsset must be exactly MSTR -- this factory rejects any other configuration. symbol is informational. instantDividend selects push-to-holder (true) vs. claim-based (false) distribution UX.";
         schema.fields = new FieldDescriptor[](3);
-        schema.fields[0] = FieldDescriptor("selectedAssets", "address[]", "Reward asset(s) -- must be exactly [MSTR]", 0);
+        schema.fields[0] = FieldDescriptor("selectedAsset", "address", "Reward asset -- must be exactly MSTR", 0);
         schema.fields[1] = FieldDescriptor("symbol", "string", "Informational token symbol", 0);
         schema.fields[2] = FieldDescriptor("instantDividend", "bool", "true = push MSTR directly to holders", 0);
         schema.isArray = false;
