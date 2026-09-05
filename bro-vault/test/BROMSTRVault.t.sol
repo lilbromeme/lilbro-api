@@ -188,6 +188,53 @@ contract BROMSTRVaultFactoryTest is Test {
         assertEq(BROMSTRVaultUpgradeable(payable(vault)).burnSwapAdapter(), address(burnAdapter));
     }
 
+    /// @notice Regression test for a real Flap frontend bug found on live Robinhood
+    ///         Chain mainnet: some Flap launch-UI builds double-ABI-encode
+    ///         `vaultData`, wrapping the correctly-encoded
+    ///         `abi.encode(selectedAsset, symbol, instantDividend)` inside an extra
+    ///         outer `abi.encode(bytes)`. That prepends a spurious 32-byte `0x20`
+    ///         offset word, which -- decoded directly as `(address, string, bool)`
+    ///         -- makes the real `selectedAsset` address get misread as a wildly
+    ///         out-of-bounds `string` offset, causing `abi.decode` to revert with
+    ///         no reason string. This surfaced as an unexplained
+    ///         "Token creation failed for an unrecognized contract reason" error
+    ///         with zero on-chain trace, since the whole call reverted during
+    ///         Flap's `eth_estimateGas` preflight, before any transaction was ever
+    ///         broadcast. `_decodeVaultData` tolerates this by detecting the
+    ///         leading `0x20` word and stripping the one extra `bytes` layer.
+    function test_newVault_toleratesFlapDoubleEncodedVaultData() public {
+        bytes memory correct = _vaultData(address(mstr), true);
+        bytes memory doubleEncoded = abi.encode(correct);
+
+        vm.prank(RH_VAULT_PORTAL);
+        address vault = factory.newVault(predictedTaxToken, address(0), address(this), doubleEncoded);
+
+        assertTrue(vault != address(0));
+        assertEq(BROMSTRVaultUpgradeable(payable(vault)).mstrToken(), address(mstr));
+        assertTrue(BROMSTRVaultUpgradeable(payable(vault)).instantDividend());
+    }
+
+    /// @notice Same regression, reproduced with the exact real deployed MSTR
+    ///         address and "BRO" symbol from the real failed BRO launch attempt
+    ///         on Robinhood Chain mainnet, double-encoded the same way Flap's
+    ///         frontend's captured `eth_estimateGas` calldata was: byte-for-byte,
+    ///         `abi.encode(abi.encode(realMstr, "BRO", true))`.
+    function test_newVault_toleratesRealCapturedFlapVaultData() public {
+        address realMstr = 0xec262a75e413fAfD0dF80480274532C79D42da09;
+        bytes memory realCapturedVaultData = abi.encode(abi.encode(realMstr, "BRO", true));
+
+        BROMSTRVaultBeaconFactory realFactory = new BROMSTRVaultBeaconFactory(
+            realMstr, address(mstrAdapter), address(liquidityAdapter), address(burnAdapter), keeper
+        );
+
+        vm.prank(RH_VAULT_PORTAL);
+        address vault = realFactory.newVault(predictedTaxToken, address(0), address(this), realCapturedVaultData);
+
+        assertTrue(vault != address(0));
+        assertEq(BROMSTRVaultUpgradeable(payable(vault)).mstrToken(), realMstr);
+        assertTrue(BROMSTRVaultUpgradeable(payable(vault)).instantDividend());
+    }
+
     function test_newVault_rejectsUnsupportedAsset() public {
         vm.prank(RH_VAULT_PORTAL);
         vm.expectRevert("Unsupported asset");

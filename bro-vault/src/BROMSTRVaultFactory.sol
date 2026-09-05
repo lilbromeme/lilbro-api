@@ -202,7 +202,7 @@ contract BROMSTRVaultBeaconFactory is VaultFactoryBaseV2 {
         require(taxToken != address(0), "Zero address");
         require(isQuoteTokenSupported(quoteToken), "Unsupported quote token");
 
-        (address selectedAsset,, bool instantDividend) = abi.decode(vaultData, (address, string, bool));
+        (address selectedAsset,, bool instantDividend) = _decodeVaultData(vaultData);
 
         _validateSelectedAsset(selectedAsset);
 
@@ -226,6 +226,35 @@ contract BROMSTRVaultBeaconFactory is VaultFactoryBaseV2 {
         );
 
         emit VaultCreated(taxToken, vault, selectedAsset);
+    }
+
+    /// @notice Decode `vaultData`, tolerating a known Flap launch-UI bug that
+    ///         double-ABI-encodes it.
+    /// @dev    Confirmed on live Robinhood Chain mainnet: some Flap frontend builds
+    ///         wrap the correctly-encoded `abi.encode(selectedAsset, symbol,
+    ///         instantDividend)` in an extra outer `abi.encode(bytes)`, prepending a
+    ///         spurious 32-byte `0x20` offset word. Decoding that directly as
+    ///         `(address, string, bool)` reads the real `selectedAsset` address as a
+    ///         `string` offset instead, which is wildly out of bounds and makes
+    ///         `abi.decode` revert with no reason string -- surfacing to the end
+    ///         user as an unexplained, unrecognized launch failure.
+    ///
+    ///         A correctly-encoded `selectedAsset` can never equal exactly `32`
+    ///         (that would require MSTR's real deployed address to be
+    ///         `0x0000...0020`, which it is not, and `_validateSelectedAsset` would
+    ///         reject any other address here regardless) -- so reading the first
+    ///         word as `32` is an unambiguous signal that one extra `bytes` layer
+    ///         needs to be stripped before decoding the real fields.
+    function _decodeVaultData(bytes calldata vaultData)
+        internal
+        pure
+        returns (address selectedAsset, string memory symbol, bool instantDividend)
+    {
+        bytes memory payload = vaultData;
+        if (vaultData.length >= 32 && uint256(bytes32(vaultData[0:32])) == 32) {
+            payload = abi.decode(vaultData, (bytes));
+        }
+        (selectedAsset, symbol, instantDividend) = abi.decode(payload, (address, string, bool));
     }
 
     function _validateSelectedAsset(address selectedAsset) internal view {
