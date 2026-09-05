@@ -189,39 +189,47 @@ contract BROMSTRVaultFactoryTest is Test {
     }
 
     /// @notice Regression test for a real Flap frontend bug found on live Robinhood
-    ///         Chain mainnet: some Flap launch-UI builds double-ABI-encode
-    ///         `vaultData`, wrapping the correctly-encoded
-    ///         `abi.encode(selectedAsset, symbol, instantDividend)` inside an extra
-    ///         outer `abi.encode(bytes)`. That prepends a spurious 32-byte `0x20`
-    ///         offset word, which -- decoded directly as `(address, string, bool)`
-    ///         -- makes the real `selectedAsset` address get misread as a wildly
-    ///         out-of-bounds `string` offset, causing `abi.decode` to revert with
-    ///         no reason string. This surfaced as an unexplained
+    ///         Chain mainnet: some Flap launch-UI builds encode `vaultData` as a
+    ///         SINGLE ABI tuple parameter --
+    ///         `abi.encode((selectedAsset, symbol, instantDividend))` -- instead of
+    ///         flat top-level fields --
+    ///         `abi.encode(selectedAsset, symbol, instantDividend)`, which is what
+    ///         this factory (and Flap's own official `VaultFactoryBaseV2` reference
+    ///         example) expects. Because the tuple contains a dynamic `string`
+    ///         member, encoding it as one parameter prepends a single extra 32-byte
+    ///         `0x20` offset word ahead of an otherwise byte-identical flat
+    ///         encoding (confirmed byte-for-byte against `cast abi-encode
+    ///         "f((address,string,bool))"`). Decoded directly as
+    ///         `(address, string, bool)`, that leading word gets misread as
+    ///         `selectedAsset` itself, and the real `selectedAsset` address gets
+    ///         misread as a wildly out-of-bounds `string` offset, so `abi.decode`
+    ///         reverts with no reason string. This surfaced as an unexplained
     ///         "Token creation failed for an unrecognized contract reason" error
     ///         with zero on-chain trace, since the whole call reverted during
     ///         Flap's `eth_estimateGas` preflight, before any transaction was ever
     ///         broadcast. `_decodeVaultData` tolerates this by detecting the
-    ///         leading `0x20` word and stripping the one extra `bytes` layer.
-    function test_newVault_toleratesFlapDoubleEncodedVaultData() public {
+    ///         leading `0x20` word and skipping it before decoding.
+    function test_newVault_toleratesFlapTupleWrappedVaultData() public {
         bytes memory correct = _vaultData(address(mstr), true);
-        bytes memory doubleEncoded = abi.encode(correct);
+        bytes memory tupleWrapped = bytes.concat(bytes32(uint256(32)), correct);
 
         vm.prank(RH_VAULT_PORTAL);
-        address vault = factory.newVault(predictedTaxToken, address(0), address(this), doubleEncoded);
+        address vault = factory.newVault(predictedTaxToken, address(0), address(this), tupleWrapped);
 
         assertTrue(vault != address(0));
         assertEq(BROMSTRVaultUpgradeable(payable(vault)).mstrToken(), address(mstr));
         assertTrue(BROMSTRVaultUpgradeable(payable(vault)).instantDividend());
     }
 
-    /// @notice Same regression, reproduced with the exact real deployed MSTR
-    ///         address and "BRO" symbol from the real failed BRO launch attempt
-    ///         on Robinhood Chain mainnet, double-encoded the same way Flap's
-    ///         frontend's captured `eth_estimateGas` calldata was: byte-for-byte,
-    ///         `abi.encode(abi.encode(realMstr, "BRO", true))`.
+    /// @notice Same regression, using the exact real deployed MSTR address and
+    ///         "BRO" symbol from the real failed BRO launch attempt on Robinhood
+    ///         Chain mainnet, tuple-wrapped the same way Flap's frontend's captured
+    ///         `eth_estimateGas` calldata was. Independently verified against the
+    ///         real captured bytes via `cast call` on live mainnet, not just this
+    ///         local reconstruction.
     function test_newVault_toleratesRealCapturedFlapVaultData() public {
         address realMstr = 0xec262a75e413fAfD0dF80480274532C79D42da09;
-        bytes memory realCapturedVaultData = abi.encode(abi.encode(realMstr, "BRO", true));
+        bytes memory realCapturedVaultData = bytes.concat(bytes32(uint256(32)), abi.encode(realMstr, "BRO", true));
 
         BROMSTRVaultBeaconFactory realFactory = new BROMSTRVaultBeaconFactory(
             realMstr, address(mstrAdapter), address(liquidityAdapter), address(burnAdapter), keeper

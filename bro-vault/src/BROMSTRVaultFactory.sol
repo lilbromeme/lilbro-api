@@ -228,31 +228,46 @@ contract BROMSTRVaultBeaconFactory is VaultFactoryBaseV2 {
         emit VaultCreated(taxToken, vault, selectedAsset);
     }
 
-    /// @notice Decode `vaultData`, tolerating a known Flap launch-UI bug that
-    ///         double-ABI-encodes it.
-    /// @dev    Confirmed on live Robinhood Chain mainnet: some Flap frontend builds
-    ///         wrap the correctly-encoded `abi.encode(selectedAsset, symbol,
-    ///         instantDividend)` in an extra outer `abi.encode(bytes)`, prepending a
-    ///         spurious 32-byte `0x20` offset word. Decoding that directly as
-    ///         `(address, string, bool)` reads the real `selectedAsset` address as a
-    ///         `string` offset instead, which is wildly out of bounds and makes
-    ///         `abi.decode` revert with no reason string -- surfacing to the end
-    ///         user as an unexplained, unrecognized launch failure.
+    /// @notice Decode `vaultData`, tolerating a known Flap launch-UI bug that wraps
+    ///         it as a single ABI tuple parameter instead of flat top-level fields.
+    /// @dev    Confirmed byte-for-byte on live Robinhood Chain mainnet (both by
+    ///         replaying Flap's real captured `eth_estimateGas` calldata and by
+    ///         reproducing it independently via `abi.encode((address,string,bool))`):
+    ///         some Flap frontend builds encode `vaultData` as
+    ///         `abi.encode((selectedAsset, symbol, instantDividend))` -- ONE tuple
+    ///         argument -- rather than `abi.encode(selectedAsset, symbol,
+    ///         instantDividend)` as flat top-level fields (what this factory's own
+    ///         `newVault()` and Flap's own official `VaultFactoryBaseV2` reference
+    ///         example both expect). Because the tuple contains a dynamic member
+    ///         (`string`), ABI-encoding it as a single parameter prepends one extra
+    ///         32-byte `0x20` offset word ahead of what is otherwise a
+    ///         byte-identical flat encoding -- there is no separate length field
+    ///         (this is NOT `abi.encode(bytes)` of the inner data, which DOES carry
+    ///         a length field; treating it as such misreads `selectedAsset`'s raw
+    ///         address bytes as a bytes-length and can panic with an out-of-memory
+    ///         allocation error rather than a clean revert).
     ///
-    ///         A correctly-encoded `selectedAsset` can never equal exactly `32`
+    ///         Decoding the flat form directly as `(address, string, bool)` instead
+    ///         reads that leading `0x20` word as `selectedAsset` itself, then reads
+    ///         the real `selectedAsset` address as a wildly out-of-bounds `string`
+    ///         offset, so `abi.decode` reverts with no reason string -- surfacing to
+    ///         the end user as an unexplained, unrecognized launch failure.
+    ///
+    ///         A correctly flat-encoded `selectedAsset` can never equal exactly `32`
     ///         (that would require MSTR's real deployed address to be
     ///         `0x0000...0020`, which it is not, and `_validateSelectedAsset` would
     ///         reject any other address here regardless) -- so reading the first
-    ///         word as `32` is an unambiguous signal that one extra `bytes` layer
-    ///         needs to be stripped before decoding the real fields.
+    ///         word as `32` is an unambiguous signal that this one extra
+    ///         tuple-offset word needs to be skipped before decoding the real
+    ///         fields.
     function _decodeVaultData(bytes calldata vaultData)
         internal
         pure
         returns (address selectedAsset, string memory symbol, bool instantDividend)
     {
-        bytes memory payload = vaultData;
-        if (vaultData.length >= 32 && uint256(bytes32(vaultData[0:32])) == 32) {
-            payload = abi.decode(vaultData, (bytes));
+        bytes calldata payload = vaultData;
+        if (vaultData.length > 32 && uint256(bytes32(vaultData[0:32])) == 32) {
+            payload = vaultData[32:];
         }
         (selectedAsset, symbol, instantDividend) = abi.decode(payload, (address, string, bool));
     }

@@ -6,26 +6,33 @@
 
 | Item | Address / Value |
 |---|---|
-| `BROMSTRVaultBeaconFactory` | `0x963311e32cd50BCBF99990467B8C5354Ba05017d` |
-| Beacon (`UpgradeableBeacon`) | `0xdd2C5Bf7aB97dCf0213accb3Cc210C5f27B852C5` |
-| Vault implementation (`BROMSTRVaultUpgradeable`, 80/15/5 design) | `0x744DfB6f46166A47d883d43A7cff49C6ed225dfF` |
+| `BROMSTRVaultBeaconFactory` | `0x872aD0df771080dF74Ee1C582a8F9765A1236bb8` |
+| Beacon (`UpgradeableBeacon`) | `0x76ADb280ABAe6bf4Ec35a7f7c3c7DD28809dBdCc` |
+| Vault implementation (`BROMSTRVaultUpgradeable`, 80/15/5 design) | `0x05CD10B92980d4DBA01Ed9a515d2dB3567295764` |
 | MSTR (constructor arg) | `0xec262a75e413fAfD0dF80480274532C79D42da09` |
 | `defaultKeeper` | `0x38F5E7623E54E667127e7E9Cc65EC942d9A73e73` |
 | `defaultMstrSwapAdapter` | `0x0000000000000000000000000000000000000000` (unset -- see below) |
 | `defaultLiquidityAdapter` | `0x0000000000000000000000000000000000000000` (unset -- see below) |
 | `defaultBurnSwapAdapter` | `0x0000000000000000000000000000000000000000` (unset -- see below) |
-| Deployment tx | `0xdb7eb181a1ddb1a43ac3fb53e26cb6b22ef23b1b282ded977b6f8cf17a82d362` |
-| Block | 54503807 |
+| Deployment tx | `0x304ff3b8541c39811de78cef04740e7c1df61ca27736c1bb55af16bba35366e1` |
+| Block | 54708256 |
 | Deployer | `0x7DE1877a329849badfb200aC3BC84f9C9e86c70B` |
-| Actual cost | 0.00256684425908 ETH (gas 6,563,644 @ 0.39107 gwei effective) |
+| Actual cost | 0.002674775433836 ETH (gas 6,605,134 @ 0.404954 gwei effective) |
 
 Verified independently against live RPC (`https://rpc.mainnet.chain.robinhood.com`)
 after broadcast: receipt status 1, factory bytecode present, `factory.MSTR()`,
 `factory.defaultKeeper()`, `factory.defaultMstrSwapAdapter()`,
 `factory.defaultLiquidityAdapter()`, `factory.defaultBurnSwapAdapter()`,
-`factory.beacon()`, `factory.beaconImplementation()`, and
-`factory.isSupportedAsset(MSTR)` all read back correctly -- keeper set exactly
-as intended, all three adapter slots genuinely `address(0)` (no fakes).
+`factory.beacon()`, `beacon.implementation()`, and `factory.isSupportedAsset
+(MSTR)` all read back correctly -- keeper set exactly as intended, all three
+adapter slots genuinely `address(0)` (no fakes).
+
+**This factory includes the `vaultData` double-encoding fix -- see
+"Flap `vaultData` encoding bug" below.** It was additionally verified, live
+on mainnet via `cast call` (not just local tests), to accept the exact real
+malformed `vaultData` bytes captured from Flap's own failed launch attempt,
+and to produce the identical resulting vault address as a correctly-encoded
+call -- direct on-chain proof the fix works before recommending it for use.
 
 This factory implements the 80% dividend / 15% auto-liquidity / 5% burn
 split (see main README). **No vault has been created yet.** A vault is
@@ -182,8 +189,51 @@ send it gas ETH once dispatching is actually needed.
 
 | Item | Address / Value | Why deprecated |
 |---|---|---|
+| `BROMSTRVaultBeaconFactory` (v4, broken fix attempt) | `0x71ac1228c35bE7a15DC3C0Ea7635a83420c61971` | First attempt at the `vaultData` double-encoding fix. Wrong: assumed Flap wrapped `vaultData` as `abi.encode(bytes)` (offset + length + content) and tried to strip it via `abi.decode(vaultData, (bytes))`. The real encoding has no length field at all (see current entry above) -- misreading the real `selectedAsset` address bytes as a `bytes` length caused `Panic(0x41)` ("out of memory") instead of a clean revert, which is *worse* than the original bug. Caught by directly replaying the real captured malformed bytes against the live deployed contract before recommending it -- never used for a real launch. |
+| `BROMSTRVaultBeaconFactory` (v3, 80/15/5, no vaultData fix) | `0x963311e32cd50BCBF99990467B8C5354Ba05017d` | Correct 80/15/5 design and correct on every config check, but `newVault()` decodes `vaultData` as flat `(address, string, bool)` only. Some Flap frontend builds encode `vaultData` as a single ABI tuple parameter instead (see "Flap `vaultData` encoding bug" below), which this factory can't decode -- every real launch attempt against it failed with an unexplained, empty-data revert. |
 | `BROMSTRVaultBeaconFactory` (v2, 100%-MSTR-only design) | `0x6341d9d487bB534fD63b8B3c0aE562bca116aa9e` | Superseded by the 80/15/5 redesign above. Functionally correct for what it was, but doesn't match the current vault design and has no keeper set. |
 | `BROMSTRVaultBeaconFactory` (v1, broken) | `0xb57425a833CfA107b3c4EaB171B8bce10D974457` | `vaultDataSchema()` declared `selectedAssets` as `address[]`, which Flap's real launch UI (viem) failed to encode (`"Value ... is not a valid array"`). Fixed by switching to a scalar `address` field in v2 onward. |
 
-Both older factories are harmless, unusable artifacts left on-chain (no
-funds, no privileged owner role) -- do not paste either into Flap.
+All older factories are harmless, unusable artifacts left on-chain (no
+funds, no privileged owner role) -- do not paste any of them into Flap.
+
+### Flap `vaultData` encoding bug -- root-caused and worked around
+
+Real BRO launch attempts on Flap kept failing with "Token creation failed
+for an unrecognized contract reason. Error code: 0x1b0062e0" and zero
+on-chain trace. Root-caused by capturing Flap's actual `eth_estimateGas`
+request from the browser console and decoding the real calldata byte-for-byte
+(not simulated with guessed parameters):
+
+- The "error code" shown in Flap's UI is not a real error selector at all --
+  it's `newTokenV6WithVault`'s own function selector, echoed back as a
+  fallback when Flap's frontend has no real revert reason to decode.
+- The actual on-chain revert is **empty** (`data: "0x"`, zero bytes) -- the
+  signature of a raw `abi.decode` failure, not a named Solidity error.
+- Isolated field-by-field by replaying the real captured calldata against
+  live mainnet via `cast call`, changing one field at a time: `mktBps`,
+  the vanity salt, tax durations, name/symbol/meta, and the initial-buy
+  amount were all fine. The sole trigger is `vaultData`.
+- Flap's frontend encodes `vaultData` as **one ABI tuple parameter** --
+  `abi.encode((selectedAsset, symbol, instantDividend))` -- instead of flat
+  top-level fields -- `abi.encode(selectedAsset, symbol, instantDividend)`,
+  which is what this factory's `newVault()` and Flap's own official
+  `VaultFactoryBaseV2` reference example (`FreeCoinBeacon.sol` in
+  `flap-sh/FlapVaultExample`) both expect. Confirmed byte-for-byte via
+  `cast abi-encode "f((address,string,bool))"`.
+- Because the tuple contains a dynamic `string` member, encoding it as one
+  parameter prepends a single extra 32-byte `0x20` offset word ahead of an
+  otherwise byte-identical flat encoding. Decoded directly as
+  `(address, string, bool)`, that word gets misread as `selectedAsset`
+  itself, and the real `selectedAsset` address gets misread as a wildly
+  out-of-bounds `string` offset -- hence the empty revert.
+
+**This is a bug in Flap's own frontend**, not in our contracts -- our
+factory decodes `vaultData` exactly the way Flap's own reference example
+does. The fix lives in `BROMSTRVaultFactory.sol`'s `_decodeVaultData()`:
+detect a leading `0x20` word (a legitimate `selectedAsset` can never equal
+exactly `32`) and skip it before decoding, so the factory accepts *either*
+encoding. Verified two ways before being recommended for use: the full
+Foundry test suite, and a direct `cast call` replay of the exact real
+captured malformed bytes against the live deployed factory on mainnet,
+confirmed to produce the identical result as a correctly-encoded call.
