@@ -1,0 +1,20 @@
+{
+  "name": "bro-vault-keeper",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dispatch": "tsx src/dispatch.ts",
+    "dividends": "tsx src/dividends.ts",
+    "run-once": "npm run dispatch && npm run dividends"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.5",
+    "viem": "^2.21.0"
+  },
+  "devDependencies": {
+    "tsx": "^4.19.0",
+    "typescript": "^5.6.0",
+    "@types/node": "^22.7.0"
+  }
+}
