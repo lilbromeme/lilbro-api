@@ -50,6 +50,20 @@ html, body, #root {
   scroll-margin-top: 6rem;
 }
 
+.btn-admin {
+  padding: 0.5rem 1rem;
+  border-radius: 0.5rem;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: rgba(255, 255, 255, 0.04);
+  font-size: 0.8rem;
+  letter-spacing: 0.05em;
+  color: var(--text-primary);
+  transition: background 0.2s ease;
+}
+.btn-admin:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
 .chapter-anchor::before {
   content: '';
   width: 18px;

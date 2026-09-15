@@ -1,73 +1,26 @@
-import { useCallback, useRef, useState } from 'react'
-import useLenis from './hooks/useLenis.js'
-import useKonami from './hooks/useKonami.js'
-import CustomCursor from './components/CustomCursor.jsx'
-import FloatingNav from './components/FloatingNav.jsx'
-import ChapterIndicator from './components/ChapterIndicator.jsx'
-import Hero from './components/Hero.jsx'
-import Memory from './components/Memory.jsx'
-import Gallery from './components/Gallery.jsx'
-import Loss from './components/Loss.jsx'
-import Mission from './components/Mission.jsx'
-import DogsEffect from './components/DogsEffect.jsx'
-import DracoFund from './components/DracoFund.jsx'
-import ImpactLedger from './components/ImpactLedger.jsx'
-import Token from './components/Token.jsx'
-import Archive from './components/Archive.jsx'
-import DogStories from './components/DogStories.jsx'
-import Community from './components/Community.jsx'
-import FinalCTA from './components/FinalCTA.jsx'
-import Footer from './components/Footer.jsx'
-import EasterEggToast from './components/EasterEggToast.jsx'
+import { BrowserRouter, Routes, Route } from 'react-router-dom'
+import DemoModeBanner from './components/DemoModeBanner.jsx'
+import HomePage from './pages/HomePage.jsx'
+import DonatePage from './pages/DonatePage.jsx'
+import FundPage from './pages/FundPage.jsx'
+import ImpactPage from './pages/ImpactPage.jsx'
+import TransparencyPage from './pages/TransparencyPage.jsx'
+import AdminDashboardPage from './pages/admin/AdminDashboardPage.jsx'
+import AdminCasesPage from './pages/admin/AdminCasesPage.jsx'
 
 export default function App() {
-  useLenis()
-  const heroRef = useRef(null)
-  const [logoClicks, setLogoClicks] = useState(0)
-  const [egg, setEgg] = useState(null)
-
-  const handleLogoClick = useCallback(() => {
-    setLogoClicks((c) => {
-      const next = c + 1
-      if (next >= 3) {
-        setEgg('She is always here.')
-        setTimeout(() => setEgg(null), 3000)
-        return 0
-      }
-      return next
-    })
-  }, [])
-
-  useKonami(
-    useCallback(() => {
-      setEgg('GOOD GIRL.')
-      setTimeout(() => setEgg(null), 3000)
-    }, [])
-  )
-
   return (
-    <div id="top" className="bg-black">
-      <div className="grain" />
-      <CustomCursor />
-      <FloatingNav onLogoClick={handleLogoClick} />
-      <ChapterIndicator />
-
-      <Hero scrollRef={heroRef} />
-      <Memory />
-      <Gallery />
-      <Loss />
-      <Mission />
-      <DogsEffect />
-      <DracoFund />
-      <ImpactLedger />
-      <Token />
-      <Archive />
-      <DogStories />
-      <Community />
-      <FinalCTA />
-      <Footer />
-
-      <EasterEggToast message={egg} />
-    </div>
+    <BrowserRouter>
+      <DemoModeBanner />
+      <Routes>
+        <Route path="/" element={<HomePage />} />
+        <Route path="/donate" element={<DonatePage />} />
+        <Route path="/fund" element={<FundPage />} />
+        <Route path="/impact" element={<ImpactPage />} />
+        <Route path="/transparency" element={<TransparencyPage />} />
+        <Route path="/admin" element={<AdminDashboardPage />} />
+        <Route path="/admin/cases" element={<AdminCasesPage />} />
+      </Routes>
+    </BrowserRouter>
   )
 }
