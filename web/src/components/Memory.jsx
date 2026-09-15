@@ -18,7 +18,7 @@ export default function Memory() {
         className="max-w-3xl mx-auto mt-24 relative"
       >
         <div className="relative rounded-sm overflow-hidden aspect-[4/5]" data-cursor="view">
-          <img src="/images/draco-hero.svg" alt="Draco" className="w-full h-full object-cover" loading="lazy" />
+          <img src="/images/draco-2.jpg" alt="Draco" className="w-full h-full object-cover" loading="lazy" />
           <div className="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent" />
         </div>
         <p className="mt-10 text-center text-white/60 text-base md:text-lg leading-relaxed max-w-xl mx-auto">

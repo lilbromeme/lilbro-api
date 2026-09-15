@@ -73,7 +73,7 @@ export default function Hero({ scrollRef }) {
           style={{ opacity: stage >= 3 ? imgOpacity : 0, scale: imgScale }}
         >
           <img
-            src="/images/draco-hero.svg"
+            src="/images/draco-hero.jpg"
             alt="Draco"
             className="w-full h-full object-cover"
             loading="eager"

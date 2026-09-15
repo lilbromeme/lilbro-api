@@ -44,10 +44,10 @@ export const launchStatus = {
 
 // Gallery memory placeholders — replace with real Draco memories.
 export const memories = [
-  { day: '001', label: 'DAY 001', text: 'MEMORY PLACEHOLDER' },
-  { day: '147', label: 'DAY 147', text: 'MEMORY PLACEHOLDER' },
-  { day: '382', label: 'DAY 382', text: 'MEMORY PLACEHOLDER' },
-  { day: 'INF', label: 'DAY ∞', text: 'MEMORY PLACEHOLDER' },
+  { day: '001', label: 'DAY 001', text: 'MEMORY PLACEHOLDER', image: '/images/draco-hero.jpg' },
+  { day: '147', label: 'DAY 147', text: 'MEMORY PLACEHOLDER', image: '/images/draco-2.jpg' },
+  { day: '382', label: 'DAY 382', text: 'MEMORY PLACEHOLDER', image: '/images/draco-hero.jpg' },
+  { day: 'INF', label: 'DAY ∞', text: 'MEMORY PLACEHOLDER', image: '/images/draco-2.jpg' },
 ]
 
 // Impact ledger entries — populate only with real, verified donations.

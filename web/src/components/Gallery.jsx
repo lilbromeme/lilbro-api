@@ -24,7 +24,7 @@ export default function Gallery() {
               onMouseEnter={() => setActive(i)}
               onMouseLeave={() => setActive(null)}
             >
-              <img src="/images/draco-hero.svg" className="w-full h-full object-cover" alt={m.label} loading="lazy" />
+              <img src={m.image} className="w-full h-full object-cover" alt={m.label} loading="lazy" />
               <div className="absolute inset-0 bg-black/40 group-hover:bg-black/70 transition" />
               <span className="absolute top-4 left-4 mono text-[11px] tracking-[0.2em] text-white/70">
                 {m.label}
@@ -46,7 +46,7 @@ export default function Gallery() {
         <div className="md:hidden flex flex-col gap-6 px-6 overflow-y-auto max-h-[70vh]">
           {memories.map((m) => (
             <div key={m.day} className="relative aspect-[4/5] rounded-sm overflow-hidden">
-              <img src="/images/draco-hero.svg" className="w-full h-full object-cover" alt={m.label} loading="lazy" />
+              <img src={m.image} className="w-full h-full object-cover" alt={m.label} loading="lazy" />
               <div className="absolute inset-0 bg-black/50" />
               <span className="absolute top-3 left-3 mono text-[11px] tracking-[0.2em] text-white/70">
                 {m.label}

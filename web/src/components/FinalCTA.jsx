@@ -11,7 +11,7 @@ export default function FinalCTA() {
         transition={{ duration: 1.4 }}
         className="w-full max-w-xs aspect-square rounded-full overflow-hidden opacity-70"
       >
-        <img src="/images/draco-hero.svg" className="w-full h-full object-cover" alt="Draco" loading="lazy" />
+        <img src="/images/draco-hero.jpg" className="w-full h-full object-cover" alt="Draco" loading="lazy" />
       </motion.div>
 
       <motion.h2
