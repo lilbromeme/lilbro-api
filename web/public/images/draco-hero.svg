@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="2000" viewBox="0 0 1600 2000">
+  <defs>
+    <radialGradient id="glow" cx="50%" cy="38%" r="60%">
+      <stop offset="0%" stop-color="#2a2a35"/>
+      <stop offset="45%" stop-color="#101014"/>
+      <stop offset="100%" stop-color="#000000"/>
+    </radialGradient>
+    <linearGradient id="fade" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#000" stop-opacity="0"/>
+      <stop offset="100%" stop-color="#000" stop-opacity="0.9"/>
+    </linearGradient>
+  </defs>
+  <rect width="1600" height="2000" fill="url(#glow)"/>
+  <!-- soft silhouette placeholder for Draco's photograph -->
+  <ellipse cx="800" cy="1150" rx="420" ry="520" fill="#050506" opacity="0.85"/>
+  <path d="M620 900 Q800 650 980 900 Q1040 1150 800 1500 Q560 1150 620 900 Z" fill="#0c0c10" opacity="0.7"/>
+  <circle cx="700" cy="980" r="10" fill="#e8e2d8" opacity="0.5"/>
+  <circle cx="900" cy="980" r="10" fill="#e8e2d8" opacity="0.5"/>
+  <rect width="1600" height="2000" fill="url(#fade)"/>
+</svg>
