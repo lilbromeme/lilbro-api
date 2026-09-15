@@ -1,12 +1,18 @@
 import { motion } from 'framer-motion'
 import { AtSign, Send } from 'lucide-react'
 import { social } from '../config/draco.js'
+import { ChapterOpen } from './ChapterMarker.jsx'
 
 const FRAGMENTS = ['FOR DRACO.', 'FOR EVERY DOG.', 'ONE MEMORY.', 'ONE COMMUNITY.', 'ONE MORE LIFE SAVED.']
 
 export default function Community() {
   return (
-    <section id="community" className="relative bg-black py-40 px-6 overflow-hidden">
+    <section
+      id="chapter-legacy"
+      className="relative py-20 md:py-32 px-6 overflow-hidden"
+      style={{ background: 'linear-gradient(180deg, #0e0e10 0%, #14110d 100%)' }}
+    >
+      <ChapterOpen number="07" label="LEGACY" />
       <div className="relative max-w-4xl mx-auto flex flex-wrap justify-center gap-6 mb-24">
         {FRAGMENTS.map((f, i) => (
           <motion.div

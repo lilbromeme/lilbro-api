@@ -1,5 +1,6 @@
 import { motion } from 'framer-motion'
 import { token } from '../config/draco.js'
+import { ChapterOpen, ChapterClose } from './ChapterMarker.jsx'
 
 const FIELDS = [
   ['NAME', token.name],
@@ -11,7 +12,12 @@ const FIELDS = [
 
 export default function Token() {
   return (
-    <section className="relative bg-black py-40 px-6">
+    <section
+      id="chapter-token"
+      className="relative py-20 md:py-32 px-6"
+      style={{ background: 'linear-gradient(180deg, #16171a 0%, #0e0e10 100%)' }}
+    >
+      <ChapterOpen number="06" label="THE TOKEN" />
       <div className="max-w-3xl mx-auto text-center">
         <h2 className="text-3xl md:text-5xl font-semibold text-[#ece7de]">
           THE COMMUNITY HAS A TOKEN.
@@ -52,6 +58,8 @@ export default function Token() {
           GET $DRACO
         </button>
       </div>
+
+      <ChapterClose number="06" />
     </section>
   )
 }

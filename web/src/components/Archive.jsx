@@ -7,7 +7,10 @@ export default function Archive() {
   const [open, setOpen] = useState(null)
 
   return (
-    <section className="relative bg-black py-40 px-6">
+    <section
+      className="relative py-20 md:py-32 px-6"
+      style={{ background: 'linear-gradient(180deg, #0e0e10 0%, #0a0908 100%)' }}
+    >
       <p className="mono text-center text-[11px] tracking-[0.25em] text-white/40">THE ARCHIVE</p>
 
       <div className="max-w-4xl mx-auto mt-16 grid grid-cols-1 md:grid-cols-3 gap-4">

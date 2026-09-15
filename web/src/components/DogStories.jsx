@@ -11,7 +11,11 @@ export default function DogStories() {
   const stage = useTransform(scrollYProgress, [0.1, 0.6], [0, COUNTS.length - 1])
 
   return (
-    <section ref={ref} className="relative bg-black py-56 px-6 overflow-hidden min-h-[120vh]">
+    <section
+      ref={ref}
+      className="relative py-24 md:py-40 px-6 overflow-hidden min-h-[120vh]"
+      style={{ background: 'linear-gradient(180deg, #0a0908 0%, #0e0e10 100%)' }}
+    >
       <motion.h2
         initial={{ opacity: 0 }}
         whileInView={{ opacity: 1 }}

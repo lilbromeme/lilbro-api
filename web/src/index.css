@@ -7,6 +7,14 @@
 
 :root {
   color-scheme: dark;
+  --bg-void: #08090a;
+  --bg-warm: #11100f;
+  --bg-graphite: #17191c;
+  --bg-elevated: #202226;
+  --text-primary: #f5f3ee;
+  --text-secondary: #a8a8a8;
+  --accent-blue: #8fa4b8;
+  --accent-warm: #c5b8a5;
 }
 
 * {
@@ -14,10 +22,40 @@
 }
 
 html, body, #root {
-  background: #050505;
-  color: #ece7de;
+  background: var(--bg-void);
+  color: var(--text-primary);
   margin: 0;
   overflow-x: hidden;
+}
+
+.text-micro {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 11px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+
+.chapter-anchor {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 11px;
+  letter-spacing: 0.25em;
+  text-transform: uppercase;
+  color: var(--accent-blue);
+}
+[id^='chapter-'] {
+  scroll-margin-top: 6rem;
+}
+
+.chapter-anchor::before {
+  content: '';
+  width: 18px;
+  height: 1px;
+  background: var(--accent-blue);
+  opacity: 0.6;
 }
 
 body {

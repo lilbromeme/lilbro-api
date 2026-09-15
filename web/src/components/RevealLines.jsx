@@ -9,7 +9,7 @@ export default function RevealLines({ lines, className = '', lineClassName = '' 
           key={i}
           initial={{ opacity: 0, y: 24 }}
           whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true, amount: 0.6 }}
+          viewport={{ once: true, amount: 0.4 }}
           transition={{ duration: 0.9, delay: i * 0.25 }}
           className={lineClassName}
         >

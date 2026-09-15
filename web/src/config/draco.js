@@ -63,6 +63,13 @@ export const ledgerEntries = [
   },
 ]
 
+// Milestones the fund hasn't reached yet — shown as "waiting to be written".
+export const milestones = [
+  { id: '01', title: 'FIRST DOG' },
+  { id: '02', title: 'FIRST TREATMENT' },
+  { id: '03', title: 'FIRST RESCUE' },
+]
+
 // Future dog stories — do not fabricate. Populate as real cases arrive.
 export const dogStories = []
 

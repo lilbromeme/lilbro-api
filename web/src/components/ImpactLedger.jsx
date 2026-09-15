@@ -1,14 +1,36 @@
 import { motion } from 'framer-motion'
-import { ledgerEntries } from '../config/draco.js'
+import { ledgerEntries, milestones } from '../config/draco.js'
 
 export default function ImpactLedger() {
   return (
-    <section id="impact-ledger" className="relative bg-black py-40 px-6">
+    <section
+      id="impact-ledger"
+      className="relative py-20 md:py-32 px-6"
+      style={{ background: 'linear-gradient(180deg, #202226 0%, #26282c 100%)' }}
+    >
       <p className="mono text-center text-[11px] tracking-[0.25em] text-white/40">
         IMPACT LEDGER // ARCHIVE
       </p>
 
-      <div className="max-w-2xl mx-auto mt-20 relative">
+      <div className="max-w-lg mx-auto mt-16 relative">
+        <div className="absolute left-4 top-2 bottom-2 w-px bg-white/10" />
+        {milestones.map((m, i) => (
+          <motion.div
+            key={m.id}
+            initial={{ opacity: 0, x: -12 }}
+            whileInView={{ opacity: 1, x: 0 }}
+            viewport={{ once: true, amount: 0.5 }}
+            transition={{ duration: 0.6, delay: i * 0.08 }}
+            className="relative pl-12 pb-10"
+          >
+            <span className="absolute left-[10px] top-1 w-2.5 h-2.5 rounded-full border border-white/25 bg-[#26282c]" />
+            <p className="mono text-[11px] tracking-[0.2em] text-white/60">{m.id} — {m.title}</p>
+            <p className="mt-1 text-white/35 text-xs tracking-[0.15em] mono">WAITING TO BE WRITTEN</p>
+          </motion.div>
+        ))}
+      </div>
+
+      <div className="max-w-2xl mx-auto mt-16 relative">
         <div className="absolute left-4 top-0 bottom-0 w-px bg-white/10" />
         {ledgerEntries.map((entry, i) => (
           <motion.div

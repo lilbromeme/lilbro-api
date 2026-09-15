@@ -3,6 +3,7 @@ import useLenis from './hooks/useLenis.js'
 import useKonami from './hooks/useKonami.js'
 import CustomCursor from './components/CustomCursor.jsx'
 import FloatingNav from './components/FloatingNav.jsx'
+import ChapterIndicator from './components/ChapterIndicator.jsx'
 import Hero from './components/Hero.jsx'
 import Memory from './components/Memory.jsx'
 import Gallery from './components/Gallery.jsx'
@@ -45,10 +46,11 @@ export default function App() {
   )
 
   return (
-    <div className="bg-black">
+    <div id="top" className="bg-black">
       <div className="grain" />
       <CustomCursor />
       <FloatingNav onLogoClick={handleLogoClick} />
+      <ChapterIndicator />
 
       <Hero scrollRef={heroRef} />
       <Memory />

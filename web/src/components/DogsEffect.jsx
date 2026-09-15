@@ -1,6 +1,7 @@
 import { useRef } from 'react'
 import { motion, useScroll, useTransform } from 'framer-motion'
 import { PawPrint } from 'lucide-react'
+import { ChapterOpen } from './ChapterMarker.jsx'
 
 const POINTS = Array.from({ length: 90 }, () => ({
   x: Math.random() * 100,
@@ -15,7 +16,13 @@ export default function DogsEffect() {
   const pawCount = useTransform(scrollYProgress, [0.5, 1], [1, 12])
 
   return (
-    <section id="impact" ref={ref} className="relative bg-black py-56 px-6 overflow-hidden min-h-[140vh]">
+    <section
+      id="chapter-impact"
+      ref={ref}
+      className="relative py-24 md:py-40 px-6 overflow-hidden min-h-[140vh]"
+      style={{ background: 'radial-gradient(ellipse at 50% 10%, #23262b 0%, #1a1c20 45%, #131417 100%)' }}
+    >
+      <ChapterOpen number="05" label="IMPACT" />
       <div className="absolute inset-0">
         {POINTS.map((p, i) => (
           <motion.div

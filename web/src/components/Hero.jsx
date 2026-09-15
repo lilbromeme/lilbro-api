@@ -10,8 +10,8 @@ export default function Hero({ scrollRef }) {
     target: scrollRef,
     offset: ['start start', 'end start'],
   })
-  const imgOpacity = useTransform(scrollYProgress, [0, 0.6], [0.08, 1])
-  const imgScale = useTransform(scrollYProgress, [0, 1], [1.08, 1])
+  const imgOpacity = useTransform(scrollYProgress, [0, 0.5], [0.88, 1])
+  const imgScale = useTransform(scrollYProgress, [0, 1], [1.06, 1])
   const titleY = useTransform(scrollYProgress, [0, 1], [0, -60])
 
   useEffect(() => {
@@ -75,10 +75,15 @@ export default function Hero({ scrollRef }) {
           <img
             src="/images/draco-hero.jpg"
             alt="Draco"
-            className="w-full h-full object-cover"
+            className="w-full h-full object-cover brightness-[1.08] saturate-[1.05]"
             loading="eager"
           />
-          <div className="absolute inset-0 bg-gradient-to-t from-black via-black/30 to-black/60" />
+          {/* gradient overlay for legibility, not a solid black mask */}
+          <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/10 to-black/40" />
+          {/* soft warm highlight */}
+          <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_50%_40%,rgba(197,184,165,0.12),transparent_60%)]" />
+          {/* edge vignette only */}
+          <div className="absolute inset-0 shadow-[inset_0_0_180px_90px_rgba(0,0,0,0.55)]" />
         </motion.div>
 
         {/* title */}
@@ -90,10 +95,10 @@ export default function Hero({ scrollRef }) {
             transition={{ duration: 1.6, delay: 0.4 }}
             className="relative z-20 text-center px-6"
           >
-            <h1 className="text-[18vw] md:text-[13vw] leading-none font-semibold tracking-tight text-[#ece7de]">
+            <h1 className="text-[15vw] md:text-[13vw] leading-none font-semibold tracking-tight text-[#f5f3ee] drop-shadow-[0_4px_30px_rgba(0,0,0,0.6)]">
               DRACO
             </h1>
-            <p className="mt-4 text-sm md:text-lg tracking-[0.2em] text-white/70">
+            <p className="mt-5 text-sm md:text-lg tracking-[0.2em] text-white/80">
               ONE DOG.<br className="md:hidden" /> A MILLION SECOND CHANCES.
             </p>
           </motion.div>
