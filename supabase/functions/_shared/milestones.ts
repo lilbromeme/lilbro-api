@@ -6,7 +6,7 @@
 // twice even under concurrent invocations.
 
 import type { SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2'
-import { notifyAll } from './notify.ts'
+import { emitMilestoneReached } from './events.ts'
 
 type MilestoneType = 'FUND' | 'DOGS_HELPED' | 'DONATIONS' | 'COMMUNITY'
 
@@ -16,7 +16,7 @@ async function currentMetricValue(
 ): Promise<number> {
   switch (type) {
     case 'FUND': {
-      const { data } = await supabase.from('public_fund_summary').select('total_generated_usd').single()
+      const { data } = await supabase.from('public_fund_summary').select('total_generated_usd').maybeSingle()
       return data?.total_generated_usd ?? 0
     }
     case 'DONATIONS': {
@@ -78,11 +78,22 @@ export async function checkMilestones(supabase: SupabaseClient, type: MilestoneT
 
     achieved.push(updated)
 
-    await notifyAll({
-      kind: 'milestone',
-      pawNumber: String(achieved.length).padStart(3, '0'),
+    // Paw number is a global sequence across ALL milestone types, in the
+    // order they were actually achieved — not a per-batch/per-type index.
+    // Bug fixed here: this used to number from the local `achieved` array,
+    // which reset every invocation and could reissue "PAW #001" for the
+    // first milestone hit in any later, unrelated batch.
+    const { count: totalAchieved } = await supabase
+      .from('milestones')
+      .select('id', { count: 'exact', head: true })
+      .not('achieved_at', 'is', null)
+
+    await emitMilestoneReached(supabase, {
+      pawNumber: String(totalAchieved ?? achieved.length).padStart(3, '0'),
       thresholdUsd: Number(updated.threshold),
       type,
+      milestoneId: updated.id,
+      title: updated.title,
     })
   }
 

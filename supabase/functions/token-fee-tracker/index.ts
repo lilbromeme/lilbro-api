@@ -15,7 +15,7 @@
 
 import { getSupabaseAdmin } from '../_shared/supabaseAdmin.ts'
 import { checkMilestones } from '../_shared/milestones.ts'
-import { notifyAll } from '../_shared/notify.ts'
+import { emitTokenFeeReceived } from '../_shared/events.ts'
 import { handleOptions, corsHeaders } from '../_shared/cors.ts'
 
 // Deno can't import the Vite-built web/src tree directly, so the adapter
@@ -122,12 +122,7 @@ Deno.serve(async (req) => {
 
     inserted++
 
-    await notifyAll({
-      kind: 'fund_update',
-      amountUsd: fundAllocation,
-      source: 'DRACO fee allocation',
-      totalFundUsd: 0, // filled in by re-querying public_fund_summary if needed
-    })
+    await emitTokenFeeReceived(supabase, { amountUsd: fundAllocation, txHash: event.txHash })
   }
 
   if (inserted > 0) {

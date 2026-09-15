@@ -84,19 +84,60 @@ without ever requiring this codebase to hold a private key.
 ### 5. Edge Functions (`supabase/functions/`)
 Deno runtime, deployed as Supabase Edge Functions.
 
-| Function | Trigger | Purpose |
-|---|---|---|
-| `token-fee-tracker` | cron (scheduled) | Polls the blockchain adapter for new fee events, dedupes by `tx_hash`, writes `token_fees` + `treasury_transactions`, checks milestones, notifies. |
-| `donations-webhook` | HTTP, provider webhook | Validates signature, dedupes by payment id, writes `donations` + `treasury_transactions`, checks milestones, notifies. |
-| `milestone-engine` | HTTP or cron | Generic milestone check across any/all of FUND, DOGS_HELPED, DONATIONS, COMMUNITY. |
-| `public-fund` | HTTP, public | Returns `public_fund_summary`. |
-| `public-impact` | HTTP, public | Returns `public_impact_ledger`. |
-| `public-treasury` | HTTP, public | Returns `public_treasury_feed`. |
-| `public-milestones` | HTTP, public | Returns `public_milestones`. |
+| Function | Trigger | Access | Purpose |
+|---|---|---|---|
+| `token-fee-tracker` | cron (scheduled) | service-role only | Polls the blockchain adapter for new fee events, dedupes by `tx_hash`, writes `token_fees` + `treasury_transactions`, checks milestones, emits `TOKEN_FEE_RECEIVED`. |
+| `donations-webhook` | HTTP, provider webhook | signature-verified | Rate-limited, validates payload, dedupes by payment id, writes `donations` + `treasury_transactions`, checks milestones, emits `DONATION_CONFIRMED`. |
+| `notify-event` | HTTP, admin browser | admin JWT required | Lets the admin dashboard report case-lifecycle events (verified/approved/funded/published) through the dispatcher without ever holding Telegram/Discord secrets. |
+| `milestone-engine` | HTTP or cron | admin/service | Generic milestone check across any/all of FUND, DOGS_HELPED, DONATIONS, COMMUNITY. |
+| `system-health` | HTTP, admin dashboard | admin JWT required | Reports which integrations are configured as booleans only — never a secret value. |
+| `reconciliation` | HTTP, admin dashboard | admin JWT required | Compares blockchain balance vs. database accounting vs. recorded disbursements; never silently hides a mismatch. |
+| `public-fund` | HTTP, public | public | Returns `public_fund_summary`. |
+| `public-impact` | HTTP, public | public | Returns `public_impact_ledger`. |
+| `public-treasury` | HTTP, public | public | Returns `public_treasury_feed`. |
+| `public-milestones` | HTTP, public | public | Returns `public_milestones`. |
 
-All of them share `_shared/supabaseAdmin.ts` (service-role client,
-server-only), `_shared/notify.ts` (Telegram + Discord fan-out), and
-`_shared/milestones.ts` (the idempotent milestone-check routine).
+Shared modules in `_shared/`:
+- `supabaseAdmin.ts` — service-role client, server-only.
+- `requireAdmin.ts` — verifies a caller's own JWT belongs to an admin
+  (used by `system-health`, `reconciliation`, `notify-event`).
+- `events.ts` — the **central event dispatcher**. Every "something real
+  happened" moment (`DONATION_CONFIRMED`, `TOKEN_FEE_RECEIVED`,
+  `CASE_SUBMITTED`, `CASE_VERIFIED`, `CASE_REJECTED`, `CASE_APPROVED`,
+  `CASE_FUNDED`, `IMPACT_PUBLISHED`, `MILESTONE_REACHED`) is recorded to
+  `system_events` here, and public-worthy events also fan out to
+  Telegram/Discord via `notify.ts`. No other module calls
+  Telegram/Discord directly — this is what STEP 16 in the original spec
+  calls "a central event dispatcher instead of duplicating notification
+  logic".
+- `notify.ts` — Telegram + Discord message formatting/sending (called
+  only from `events.ts`).
+- `milestones.ts` — the idempotent milestone-check routine.
+- `rateLimit.ts` — minimal fixed-window rate limiter for public POST
+  endpoints (backstop only; real rate limiting belongs at the edge/WAF
+  before launch).
+
+### 5b. Admin Control Center (`web/src/pages/admin/`)
+Deliberately un-cinematic (`AdminShell.jsx`) — precise, technical,
+monospace, status pills, no film grain. Pages:
+
+- `/admin` — DRACO CONTROL: fund totals, case counts, dogs helped,
+  `SystemHealthPanel` (calls `system-health`), `ActivityStream` (live
+  `system_events`, via Supabase Realtime).
+- `/admin/cases` — the full case pipeline: SUBMITTED → DOCUMENT_REVIEW →
+  VERIFIED → APPROVED → TREASURY_PROPOSAL → AUTHORIZED_PAYMENT →
+  CONFIRMED → IMPACT_REPORT → PUBLISHED (`cases.stage`), with evidence
+  upload to the private `case-evidence` Storage bucket, full audit
+  history per case, and a duplicate-case warning
+  (`possible_duplicate_of`, set by a trigger).
+- `/admin/reconciliation` — calls the `reconciliation` function; shows
+  `✓ RECONCILED` / `⚠ RECONCILIATION REQUIRED` / an honest "blockchain
+  not configured" state — never a silently-passing false positive.
+- `/admin/settings` — read-only configuration center. Never displays or
+  accepts a secret.
+- `/admin/launch` — DRACO LAUNCH READINESS. Computes its checklist from
+  `DRACO_CONFIG` and cannot be made to say "READY" without those values
+  actually changing.
 
 ### 6. Fund accounting
 One formula, defined twice on purpose (once for the frontend at

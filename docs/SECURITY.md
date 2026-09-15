@@ -76,6 +76,81 @@
     Supabase RLS policy that lets `anon` insert into `donations`,
     `token_fees`, `treasury_transactions`, or `disbursements`.
 
+## Audit findings (fixed)
+
+A full pass over the initial implementation found and fixed:
+
+1. **Milestone numbering bug** — `checkMilestones()` numbered "PAW #NNN"
+   from a per-invocation local array instead of a global achieved-count
+   query, so the same paw number could be reissued across unrelated
+   batches. Fixed to query `count(*) where achieved_at is not null`
+   globally before notifying.
+2. **Dead code** in `AdminDashboardPage.jsx` (a no-op `Promise.all` left
+   over from an earlier draft) — removed.
+3. **Fake placeholder value sent to Telegram/Discord** — both
+   `token-fee-tracker` and `donations-webhook` hardcoded
+   `totalFundUsd: 0` in their fund-update notification instead of the
+   real running total. Fixed by routing both through the new
+   `emitDonationConfirmed` / `emitTokenFeeReceived` dispatcher functions,
+   which query `public_fund_summary` for the real total before sending.
+4. **Overly broad verifier RLS policy** — `verifications` granted
+   verifiers `FOR ALL` (including update/delete of any record, including
+   other verifiers'), which would let a verifier quietly rewrite
+   verification history. Narrowed to `SELECT` (read all, for case
+   context) and `INSERT` (only their own `verifier_id`); verifiers can no
+   longer update or delete a verification record — only an admin can,
+   and doing so is audit-logged.
+5. **`.single()` vs `.maybeSingle()`** in the milestone engine's FUND
+   metric lookup — `.single()` throws on zero rows; switched to
+   `.maybeSingle()` so a not-yet-populated view degrades to `0` instead
+   of throwing.
+6. **Supabase client crashed the entire app when unconfigured** —
+   `createClient()` throws synchronously on an empty URL, which meant
+   the cinematic homepage (which needs no backend at all) would white-
+   screen if `VITE_SUPABASE_URL` was unset. Fixed to fall back to a
+   harmless placeholder host and log a warning instead of throwing, and
+   added `.catch()` handlers to the data hooks so a network failure
+   resolves to an honest empty/zero state instead of hanging on
+   "loading" forever.
+
+## Hardening added in this pass
+
+- **Central event dispatcher** (`_shared/events.ts`) — replaces three
+  separate hand-rolled notification call sites with one path, so a fix
+  or a new event type only needs to happen once.
+- **`system_events` table + Activity Stream** — every dispatched event is
+  recorded and streamed live to `/admin` via Supabase Realtime.
+- **Case evidence via Supabase Storage** — private bucket
+  (`case-evidence`), admin-only by default, with a double-gated public
+  policy (`is_public = true` AND the case's impact report is
+  `PUBLISHED`) so a single flag flip can never leak a document early.
+  Client-side validation caps files at 15MB and an explicit content-type
+  allowlist (PDF/JPEG/PNG/WEBP/HEIC).
+- **Immutable confirmed records** — Postgres triggers now reject any
+  `UPDATE` or `DELETE` on a `donations`, `token_fees`,
+  `treasury_transactions`, or `disbursements` row once its status is
+  `confirmed`/`CONFIRMED`. A correction requires a new row, not a
+  rewrite of history.
+- **Duplicate-case flagging** — a trigger sets `possible_duplicate_of`
+  when a new case matches the same dog + category within 14 days of an
+  existing one. Non-blocking (a legitimate repeat need is common — a dog
+  can need two separate treatments), but always surfaced to the admin
+  reviewing it.
+- **Rate limiting on `donations-webhook`** — a fixed-window limiter
+  (`rate_limit_hits` table) caps a single source IP to 30 requests/minute
+  before any signature verification work happens, as a backstop against
+  a misbehaving or malicious sender. The public `public-*` read
+  endpoints rely on their `cache-control: public, max-age=30` header as
+  their primary abuse mitigation instead of a per-request DB check,
+  since they're read-only and non-monetary — a WAF/CDN rate limit in
+  front of them is still the right primary defense before launch.
+- **`requireAdmin()` helper** — `system-health`, `reconciliation`, and
+  `notify-event` all re-verify the caller's admin status server-side via
+  their own JWT (not a client-supplied flag) before doing anything.
+- **Fund reconciliation** — `/admin/reconciliation` explicitly reports
+  "blockchain not configured" rather than fabricating a `0` balance that
+  would falsely appear "reconciled" against the database total.
+
 ## Pre-launch checklist
 
 - [ ] Real blockchain adapter implemented and tested against testnet

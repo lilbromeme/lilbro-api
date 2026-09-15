@@ -1,7 +1,7 @@
 import { motion } from 'framer-motion'
+import { Link } from 'react-router-dom'
 import { PawPrint } from 'lucide-react'
 import usePublicImpact from '../hooks/usePublicImpact.js'
-import { DRACO_CONFIG } from '../config/draco.ts'
 
 export default function ImpactPage() {
   const { records, loading } = usePublicImpact()
@@ -45,15 +45,10 @@ export default function ImpactPage() {
                 <Field
                   label="TRANSACTION"
                   value={
-                    r.tx_hash && DRACO_CONFIG.explorerBaseUrl !== 'PLACEHOLDER' ? (
-                      <a
-                        href={`${DRACO_CONFIG.explorerBaseUrl}${r.tx_hash}`}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="underline decoration-white/30"
-                      >
-                        VIEW ON CHAIN →
-                      </a>
+                    r.tx_hash ? (
+                      <Link to={`/tx/${r.tx_hash}`} className="underline decoration-white/30">
+                        VIEW TRANSACTION →
+                      </Link>
                     ) : (
                       '—'
                     )

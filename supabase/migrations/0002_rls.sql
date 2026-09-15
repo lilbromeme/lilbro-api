@@ -111,8 +111,17 @@ create policy "public reads cases with published impact report" on cases
 create policy "admins full access to verifications" on verifications
   for all using (is_admin()) with check (is_admin());
 
-create policy "verifiers manage their verifications" on verifications
-  for all using (has_role('verifier')) with check (has_role('verifier'));
+-- Verifiers can read all verification records (they need context on a
+-- case's history) and create new ones under their own identity, but they
+-- can never edit or delete an existing verification record — including
+-- their own. That would let a verifier quietly rewrite history; only an
+-- admin (already covered by the "admins full access" policy above) can
+-- correct a bad verification, and doing so is auditable.
+create policy "verifiers read verifications" on verifications
+  for select using (has_role('verifier'));
+
+create policy "verifiers create their own verifications" on verifications
+  for insert with check (has_role('verifier') and verifier_id = auth.uid());
 
 -- ─────────────────────────────────────────────────────────────
 -- disbursements — internal only, no public read at all

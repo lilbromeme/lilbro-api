@@ -89,6 +89,9 @@ values ('<your-auth-user-uuid>', 'admin');
 supabase functions deploy token-fee-tracker
 supabase functions deploy donations-webhook
 supabase functions deploy milestone-engine
+supabase functions deploy notify-event
+supabase functions deploy system-health
+supabase functions deploy reconciliation
 supabase functions deploy public-fund
 supabase functions deploy public-impact
 supabase functions deploy public-treasury
@@ -98,9 +101,9 @@ supabase functions deploy public-milestones
 Set their secrets (these are server-side only — never `VITE_`-prefixed):
 
 ```
-supabase secrets set SUPABASE_URL=... SUPABASE_SERVICE_ROLE_KEY=... \
+supabase secrets set SUPABASE_URL=... SUPABASE_ANON_KEY=... SUPABASE_SERVICE_ROLE_KEY=... \
   TELEGRAM_BOT_TOKEN=... TELEGRAM_CHAT_ID=... DISCORD_WEBHOOK_URL=... \
-  DONATION_PROVIDER_WEBHOOK_SECRET=...
+  DONATION_PROVIDER_WEBHOOK_SECRET=... DRACO_NETWORK=... DRACO_FUND_WALLET=...
 ```
 
 Schedule `token-fee-tracker` to run periodically (Supabase cron, or any

@@ -4,6 +4,7 @@ const LINKS = [
   { to: '/donate', label: 'DONATE' },
   { to: '/fund', label: 'FUND' },
   { to: '/impact', label: 'IMPACT' },
+  { to: '/milestones', label: 'MILESTONES' },
   { to: '/transparency', label: 'TRANSPARENCY' },
 ]
 
